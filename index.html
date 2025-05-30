@@ -1,0 +1,1602 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimpleDoc - Web Word Processor</title>
+  <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .dark-mode {
+      background-color: #1a1a1a;
+      color: #f0f0f0;
+    }
+    
+    /* Editor styles */
+    .editor-container {
+      border: 1px solid #ccc;
+      border-radius: 0 0 4px 4px;
+    }
+    .dark-mode .editor-container {
+      border-color: #444;
+    }
+    .editor {
+      min-height: 70vh;
+      padding: 2rem;
+      background-color: white;
+      outline: none;
+      overflow-y: auto;
+      font-size: 16px;
+      line-height: 1.5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    }
+    .dark-mode .editor {
+      background-color: #2d2d2d;
+      color: #f0f0f0;
+    }
+    
+    /* Custom toolbar styles */
+    .custom-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border: 1px solid #ccc;
+      border-radius: 4px 4px 0 0;
+      border-bottom: none;
+    }
+    .dark-mode .custom-toolbar {
+      background-color: #333;
+      border-color: #444;
+    }
+    .toolbar-group {
+      display: flex;
+      margin-right: 15px;
+      margin-bottom: 5px;
+    }
+    .toolbar-button {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px 10px;
+      margin-right: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .toolbar-button:hover {
+      background-color: #e9ecef;
+    }
+    .dark-mode .toolbar-button {
+      border-color: #555;
+      color: #f0f0f0;
+    }
+    .dark-mode .toolbar-button:hover {
+      background-color: #444;
+    }
+    .toolbar-select {
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px;
+      background-color: white;
+      cursor: pointer;
+      min-width: 120px;
+    }
+    .dark-mode .toolbar-select {
+      background-color: #444;
+      border-color: #555;
+      color: #f0f0f0;
+    }
+    .active {
+      background-color: #e2e6ea;
+    }
+    .dark-mode .active {
+      background-color: #555;
+    }
+    
+    /* File menu styles */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: #f9f9f9;
+      min-width: 160px;
+      box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+      z-index: 10;
+      border-radius: 4px;
+    }
+    .dark-mode .dropdown-content {
+      background-color: #333;
+      color: #f0f0f0;
+    }
+    .dropdown-item {
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+    }
+    .dropdown-item:hover {
+      background-color: #f1f1f1;
+    }
+    .dark-mode .dropdown-item:hover {
+      background-color: #444;
+    }
+    .show {
+      display: block;
+    }
+    
+    /* Footer styles */
+    .footer {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.875rem;
+      border-top: 1px solid #e2e8f0;
+      margin-top: 2rem;
+    }
+    .dark-mode .footer {
+      border-top: 1px solid #444;
+    }
+    
+    /* Responsive styles */
+    @media (max-width: 768px) {
+      .editor {
+        padding: 1rem;
+      }
+      .custom-toolbar {
+        flex-wrap: wrap;
+      }
+      .toolbar-group {
+        margin-bottom: 8px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Font options
+    const fontOptions = [
+      { value: 'Arial, sans-serif', label: 'Arial' },
+      { value: '"Times New Roman", Times, serif', label: 'Times New Roman' },
+      { value: '"Courier New", Courier, monospace', label: 'Courier New' },
+      { value: 'Georgia, serif', label: 'Georgia' },
+      { value: 'Verdana, Geneva, sans-serif', label: 'Verdana' },
+      { value: 'Helvetica, Arial, sans-serif', label: 'Helvetica' }
+    ];
+
+    // Font size options
+    const sizeOptions = [
+      { value: '8px', label: '8px' },
+      { value: '10px', label: '10px' },
+      { value: '12px', label: '12px' },
+      { value: '14px', label: '14px' },
+      { value: '16px', label: '16px' },
+      { value: '18px', label: '18px' },
+      { value: '20px', label: '20px' },
+      { value: '24px', label: '24px' },
+      { value: '32px', label: '32px' },
+      { value: '48px', label: '48px' }
+    ];
+
+    const App = () => {
+      const [darkMode, setDarkMode] = useState(false);
+      const editorRef = useRef(null);
+      const [formats, setFormats] = useState({
+        bold: false,
+        italic: false,
+        underline: false,
+        font: 'Arial, sans-serif',
+        size: '16px',
+        align: 'left',
+        color: '#000000',
+        background: '#ffffff',
+        list: ''
+      });
+      const [undoStack, setUndoStack] = useState([]);
+      const [redoStack, setRedoStack] = useState([]);
+      const [content, setContent] = useState('');
+      const [lastSavedContent, setLastSavedContent] = useState('');
+      const saveTimeoutRef = useRef(null);
+      const [fileMenuOpen, setFileMenuOpen] = useState(false);
+
+      useEffect(() => {
+        // Load saved content from local storage
+        const savedContent = localStorage.getItem('document-content');
+        if (savedContent) {
+          setContent(savedContent);
+          setLastSavedContent(savedContent);
+          if (editorRef.current) {
+            editorRef.current.innerHTML = savedContent;
+          }
+        }
+        
+        // Set up keyboard event listeners
+        document.addEventListener('keydown', handleKeyDown);
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', handleClickOutside);
+        
+        return () => {
+          document.removeEventListener('keydown', handleKeyDown);
+          document.removeEventListener('click', handleClickOutside);
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+        };
+      }, []);
+
+      useEffect(() => {
+        // Apply dark mode to body
+        if (darkMode) {
+          document.body.classList.add('dark-mode');
+        } else {
+          document.body.classList.remove('dark-mode');
+        }
+      }, [darkMode]);
+      
+      // Save content to local storage with debounce
+      useEffect(() => {
+        if (content !== lastSavedContent) {
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+          
+          saveTimeoutRef.current = setTimeout(() => {
+            localStorage.setItem('document-content', content);
+            setLastSavedContent(content);
+          }, 1000);
+        }
+      }, [content, lastSavedContent]);
+      
+      const handleClickOutside = (event) => {
+        const fileMenuButton = document.getElementById('file-menu-button');
+        const fileMenuContent = document.getElementById('file-menu-content');
+        
+        if (fileMenuOpen && 
+            fileMenuButton && 
+            fileMenuContent && 
+            !fileMenuButton.contains(event.target) && 
+            !fileMenuContent.contains(event.target)) {
+          setFileMenuOpen(false);
+        }
+      };
+
+      const handleKeyDown = (e) => {
+        // Handle keyboard shortcuts
+        if (e.ctrlKey || e.metaKey) {
+          switch (e.key.toLowerCase()) {
+            case 'b':
+              e.preventDefault();
+              toggleFormat('bold');
+              break;
+            case 'i':
+              e.preventDefault();
+              toggleFormat('italic');
+              break;
+            case 'u':
+              e.preventDefault();
+              toggleFormat('underline');
+              break;
+            case 'z':
+              e.preventDefault();
+              handleUndo();
+              break;
+            case 'y':
+              e.preventDefault();
+              handleRedo();
+              break;
+            default:
+              break;
+          }
+        }
+      };
+
+      const handleContentChange = () => {
+        if (editorRef.current) {
+          // Save current state to undo stack
+          const newContent = editorRef.current.innerHTML;
+          if (newContent !== content) {
+            setUndoStack(prev => [...prev, content]);
+            setRedoStack([]);
+            setContent(newContent);
+          }
+          
+          // Update formats based on current selection
+          updateFormatsFromSelection();
+        }
+      };
+      
+      const updateFormatsFromSelection = () => {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          if (range) {
+            // Get the parent element of the selection
+            let parentElement = range.commonAncestorContainer;
+            if (parentElement.nodeType === 3) { // Text node
+              parentElement = parentElement.parentNode;
+            }
+            
+            // Check for formatting
+            const computedStyle = window.getComputedStyle(parentElement);
+            setFormats(prev => ({
+              ...prev,
+              bold: computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700,
+              italic: computedStyle.fontStyle === 'italic',
+              underline: computedStyle.textDecoration.includes('underline'),
+              font: computedStyle.fontFamily,
+              size: computedStyle.fontSize,
+              align: computedStyle.textAlign,
+              color: rgbToHex(computedStyle.color),
+              background: rgbToHex(computedStyle.backgroundColor)
+            }));
+          }
+        }
+      };
+      
+      // Helper function to convert RGB to HEX
+      const rgbToHex = (rgb) => {
+        if (!rgb || rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent') {
+          return '#ffffff';
+        }
+        
+        // Extract RGB values
+        const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+        if (rgbMatch) {
+          const r = parseInt(rgbMatch[1]);
+          const g = parseInt(rgbMatch[2]);
+          const b = parseInt(rgbMatch[3]);
+          
+          return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+        
+        return rgb;
+      };
+
+      const clearDocument = () => {
+        if (window.confirm('Are you sure you want to clear all content?')) {
+          if (editorRef.current) {
+            // Save current state to undo stack
+            setUndoStack(prev => [...prev, content]);
+            setRedoStack([]);
+            
+            // Clear content
+            editorRef.current.innerHTML = '';
+            setContent('');
+          }
+        }
+        setFileMenuOpen(false);
+      };
+
+      const downloadAsTxt = () => {
+        if (editorRef.current) {
+          const text = editorRef.current.innerText;
+          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+          saveAs(blob, 'document.txt');
+        }
+        setFileMenuOpen(false);
+      };
+
+      const downloadAsDocx = () => {
+        if (editorRef.current) {
+          const content = editorRef.current.innerHTML;
+          
+          // Create a simple DOCX structure
+          const zip = new JSZip();
+          
+          // Add required files for a basic DOCX
+          zip.file("word/document.xml", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:body>
+                <w:p>
+                  <w:r>
+                    <w:t>${content.replace(/(<([^>]+)>)/gi, "")}</w:t>
+                  </w:r>
+                </w:p>
+              </w:body>
+            </w:document>`);
+          
+          zip.file("_rels/.rels", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+            </Relationships>`);
+          
+          zip.file("[Content_Types].xml", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            </Types>`);
+          
+          // Generate the DOCX file
+          zip.generateAsync({type:"blob"})
+            .then(function(content) {
+              saveAs(content, "document.docx");
+            });
+        }
+        setFileMenuOpen(false);
+      };
+      
+      const toggleFileMenu = (e) => {
+        e.stopPropagation();
+        setFileMenuOpen(!fileMenuOpen);
+      };
+      
+      // Format handling functions
+      const toggleFormat = (format) => {
+        document.execCommand('styleWithCSS', false, true);
+        
+        switch (format) {
+          case 'bold':
+            document.execCommand('bold', false);
+            setFormats(prev => ({ ...prev, bold: !prev.bold }));
+            break;
+          case 'italic':
+            document.execCommand('italic', false);
+            setFormats(prev => ({ ...prev, italic: !prev.italic }));
+            break;
+          case 'underline':
+            document.execCommand('underline', false);
+            setFormats(prev => ({ ...prev, underline: !prev.underline }));
+            break;
+          default:
+            break;
+        }
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setFont = (value) => {
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('fontName', false, value);
+        setFormats(prev => ({ ...prev, font: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setSize = (value) => {
+        document.execCommand('styleWithCSS', false, true);
+        
+        // Apply font size directly with execCommand
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          
+          if (range.collapsed) {
+            // If no text is selected, create a span with the font size
+            const span = document.createElement('span');
+            span.style.fontSize = value;
+            span.textContent = '\u200B'; // Zero-width space
+            range.insertNode(span);
+            
+            // Move cursor inside the span
+            range.setStart(span.firstChild, 1);
+            range.setEnd(span.firstChild, 1);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            // If text is selected, apply font size to selection
+            document.execCommand('fontSize', false, '7'); // Use a dummy size
+            
+            // Find all font tags created by the fontSize command and replace with the actual size
+            const fontElements = editorRef.current.querySelectorAll('font[size="7"]');
+            fontElements.forEach(el => {
+              el.removeAttribute('size');
+              el.style.fontSize = value;
+            });
+          }
+        }
+        
+        setFormats(prev => ({ ...prev, size: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setAlign = (value) => {
+        document.execCommand(value, false);
+        setFormats(prev => ({ ...prev, align: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setColor = (e) => {
+        const value = e.target.value;
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('foreColor', false, value);
+        setFormats(prev => ({ ...prev, color: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setBackground = (e) => {
+        const value = e.target.value;
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('hiliteColor', false, value);
+        setFormats(prev => ({ ...prev, background: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const insertList = (type) => {
+        if (type === 'bullet') {
+          document.execCommand('insertUnorderedList', false);
+        } else if (type === 'ordered') {
+          document.execCommand('insertOrderedList', false);
+        }
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const handleUndo = () => {
+        if (undoStack.length > 0) {
+          const prevContent = undoStack[undoStack.length - 1];
+          const newUndoStack = undoStack.slice(0, -1);
+          
+          setRedoStack(prev => [...prev, content]);
+          setUndoStack(newUndoStack);
+          
+          if (editorRef.current) {
+            editorRef.current.innerHTML = prevContent;
+            setContent(prevContent);
+          }
+        }
+      };
+      
+      const handleRedo = () => {
+        if (redoStack.length > 0) {
+          const nextContent = redoStack[redoStack.length - 1];
+          const newRedoStack = redoStack.slice(0, -1);
+          
+          setUndoStack(prev => [...prev, content]);
+          setRedoStack(newRedoStack);
+          
+          if (editorRef.current) {
+            editorRef.current.innerHTML = nextContent;
+            setContent(nextContent);
+          }
+        }
+      };
+
+      return (
+        <div className={`container mx-auto px-4 py-8 max-w-5xl`}>
+          <header className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-3xl font-bold text-blue-600">SimpleDoc</h1>
+              <div className="flex items-center">
+                <div className="dropdown mr-4">
+                  <button 
+                    id="file-menu-button"
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    onClick={toggleFileMenu}
+                  >
+                    File
+                  </button>
+                  <div 
+                    id="file-menu-content"
+                    className={`dropdown-content ${fileMenuOpen ? 'show' : ''}`}
+                  >
+                    <div className="dropdown-item" onClick={downloadAsTxt}>Download as .txt</div>
+                    <div className="dropdown-item" onClick={downloadAsDocx}>Download as .docx</div>
+                    <div className="dropdown-item" onClick={clearDocument}>Clear document</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`${darkMode ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-white'} px-4 py-2 rounded flex items-center`}
+                >
+                  {darkMode ? (
+                    <span>☀️ Light Mode</span>
+                  ) : (
+                    <span>🌙 Dark Mode</span>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            {/* Custom toolbar */}
+            <div className="custom-toolbar mb-0">
+              <div className="toolbar-group">
+                <select 
+                  className="toolbar-select mr-2" 
+                  value={formats.font} 
+                  onChange={(e) => setFont(e.target.value)}
+                  style={{ fontFamily: formats.font }}
+                >
+                  {fontOptions.map(font => (
+                    <option 
+                      key={font.value} 
+                      value={font.value}
+                      style={{ fontFamily: font.value }}
+                    >
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+                
+                <select 
+                  className="toolbar-select" 
+                  value={formats.size} 
+                  onChange={(e) => setSize(e.target.value)}
+                >
+                  {sizeOptions.map(size => (
+                    <option key={size.value} value={size.value}>
+                      {size.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className={`toolbar-button ${formats.bold ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('bold')}
+                  title="Bold (Ctrl+B)"
+                >
+                  <strong>B</strong>
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.italic ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('italic')}
+                  title="Italic (Ctrl+I)"
+                >
+                  <em>I</em>
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.underline ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('underline')}
+                  title="Underline (Ctrl+U)"
+                >
+                  <u>U</u>
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <input 
+                  type="color" 
+                  value={formats.color} 
+                  onChange={setColor} 
+                  className="toolbar-button" 
+                  title="Text Color"
+                />
+                <input 
+                  type="color" 
+                  value={formats.background} 
+                  onChange={setBackground} 
+                  className="toolbar-button" 
+                  title="Highlight Color"
+                />
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className={`toolbar-button ${formats.align === 'left' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyLeft')}
+                  title="Align Left"
+                >
+                  ⟵
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'center' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyCenter')}
+                  title="Align Center"
+                >
+                  ⟷
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'right' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyRight')}
+                  title="Align Right"
+                >
+                  ⟶
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'justify' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyFull')}
+                  title="Justify"
+                >
+                  ≡
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className="toolbar-button" 
+                  onClick={() => insertList('bullet')}
+                  title="Bullet List"
+                >
+                  • List
+                </button>
+                <button 
+                  className="toolbar-button" 
+                  onClick={() => insertList('ordered')}
+                  title="Numbered List"
+                >
+                  1. List
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className="toolbar-button" 
+                  onClick={handleUndo}
+                  title="Undo (Ctrl+Z)"
+                >
+                  ↩
+                </button>
+                <button 
+                  className="toolbar-button" 
+                  onClick={handleRedo}
+                  title="Redo (Ctrl+Y)"
+                >
+                  ↪
+                </button>
+              </div>
+            </div>
+          </header>
+          
+          <main>
+            <div className="editor-container">
+              <div 
+                ref={editorRef}
+                className="editor"
+                contentEditable={true}
+                onInput={handleContentChange}
+                onBlur={updateFormatsFromSelection}
+                onMouseUp={updateFormatsFromSelection}
+                onKeyUp={updateFormatsFromSelection}
+              ></div>
+            </div>
+          </main>
+          
+          <footer className="footer">
+            <p className="font-medium">All rights reserved © Koushik Maji</p>
+          </footer>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'947af93cc5367a0c',t:'MTc0ODU3Mzk0Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimpleDoc - Web Word Processor</title>
+  <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .dark-mode {
+      background-color: #1a1a1a;
+      color: #f0f0f0;
+    }
+    
+    /* Editor styles */
+    .editor-container {
+      border: 1px solid #ccc;
+      border-radius: 0 0 4px 4px;
+    }
+    .dark-mode .editor-container {
+      border-color: #444;
+    }
+    .editor {
+      min-height: 70vh;
+      padding: 2rem;
+      background-color: white;
+      outline: none;
+      overflow-y: auto;
+      font-size: 16px;
+      line-height: 1.5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    }
+    .dark-mode .editor {
+      background-color: #2d2d2d;
+      color: #f0f0f0;
+    }
+    
+    /* Custom toolbar styles */
+    .custom-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border: 1px solid #ccc;
+      border-radius: 4px 4px 0 0;
+      border-bottom: none;
+    }
+    .dark-mode .custom-toolbar {
+      background-color: #333;
+      border-color: #444;
+    }
+    .toolbar-group {
+      display: flex;
+      margin-right: 15px;
+      margin-bottom: 5px;
+    }
+    .toolbar-button {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px 10px;
+      margin-right: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .toolbar-button:hover {
+      background-color: #e9ecef;
+    }
+    .dark-mode .toolbar-button {
+      border-color: #555;
+      color: #f0f0f0;
+    }
+    .dark-mode .toolbar-button:hover {
+      background-color: #444;
+    }
+    .toolbar-select {
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px;
+      background-color: white;
+      cursor: pointer;
+      min-width: 120px;
+    }
+    .dark-mode .toolbar-select {
+      background-color: #444;
+      border-color: #555;
+      color: #f0f0f0;
+    }
+    .active {
+      background-color: #e2e6ea;
+    }
+    .dark-mode .active {
+      background-color: #555;
+    }
+    
+    /* File menu styles */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: #f9f9f9;
+      min-width: 160px;
+      box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+      z-index: 10;
+      border-radius: 4px;
+    }
+    .dark-mode .dropdown-content {
+      background-color: #333;
+      color: #f0f0f0;
+    }
+    .dropdown-item {
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+    }
+    .dropdown-item:hover {
+      background-color: #f1f1f1;
+    }
+    .dark-mode .dropdown-item:hover {
+      background-color: #444;
+    }
+    .show {
+      display: block;
+    }
+    
+    /* Footer styles */
+    .footer {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.875rem;
+      border-top: 1px solid #e2e8f0;
+      margin-top: 2rem;
+    }
+    .dark-mode .footer {
+      border-top: 1px solid #444;
+    }
+    
+    /* Responsive styles */
+    @media (max-width: 768px) {
+      .editor {
+        padding: 1rem;
+      }
+      .custom-toolbar {
+        flex-wrap: wrap;
+      }
+      .toolbar-group {
+        margin-bottom: 8px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Font options
+    const fontOptions = [
+      { value: 'Arial, sans-serif', label: 'Arial' },
+      { value: '"Times New Roman", Times, serif', label: 'Times New Roman' },
+      { value: '"Courier New", Courier, monospace', label: 'Courier New' },
+      { value: 'Georgia, serif', label: 'Georgia' },
+      { value: 'Verdana, Geneva, sans-serif', label: 'Verdana' },
+      { value: 'Helvetica, Arial, sans-serif', label: 'Helvetica' }
+    ];
+
+    // Font size options
+    const sizeOptions = [
+      { value: '8px', label: '8px' },
+      { value: '10px', label: '10px' },
+      { value: '12px', label: '12px' },
+      { value: '14px', label: '14px' },
+      { value: '16px', label: '16px' },
+      { value: '18px', label: '18px' },
+      { value: '20px', label: '20px' },
+      { value: '24px', label: '24px' },
+      { value: '32px', label: '32px' },
+      { value: '48px', label: '48px' }
+    ];
+
+    const App = () => {
+      const [darkMode, setDarkMode] = useState(false);
+      const editorRef = useRef(null);
+      const [formats, setFormats] = useState({
+        bold: false,
+        italic: false,
+        underline: false,
+        font: 'Arial, sans-serif',
+        size: '16px',
+        align: 'left',
+        color: '#000000',
+        background: '#ffffff',
+        list: ''
+      });
+      const [undoStack, setUndoStack] = useState([]);
+      const [redoStack, setRedoStack] = useState([]);
+      const [content, setContent] = useState('');
+      const [lastSavedContent, setLastSavedContent] = useState('');
+      const saveTimeoutRef = useRef(null);
+      const [fileMenuOpen, setFileMenuOpen] = useState(false);
+
+      useEffect(() => {
+        // Load saved content from local storage
+        const savedContent = localStorage.getItem('document-content');
+        if (savedContent) {
+          setContent(savedContent);
+          setLastSavedContent(savedContent);
+          if (editorRef.current) {
+            editorRef.current.innerHTML = savedContent;
+          }
+        }
+        
+        // Set up keyboard event listeners
+        document.addEventListener('keydown', handleKeyDown);
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', handleClickOutside);
+        
+        return () => {
+          document.removeEventListener('keydown', handleKeyDown);
+          document.removeEventListener('click', handleClickOutside);
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+        };
+      }, []);
+
+      useEffect(() => {
+        // Apply dark mode to body
+        if (darkMode) {
+          document.body.classList.add('dark-mode');
+        } else {
+          document.body.classList.remove('dark-mode');
+        }
+      }, [darkMode]);
+      
+      // Save content to local storage with debounce
+      useEffect(() => {
+        if (content !== lastSavedContent) {
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+          
+          saveTimeoutRef.current = setTimeout(() => {
+            localStorage.setItem('document-content', content);
+            setLastSavedContent(content);
+          }, 1000);
+        }
+      }, [content, lastSavedContent]);
+      
+      const handleClickOutside = (event) => {
+        const fileMenuButton = document.getElementById('file-menu-button');
+        const fileMenuContent = document.getElementById('file-menu-content');
+        
+        if (fileMenuOpen && 
+            fileMenuButton && 
+            fileMenuContent && 
+            !fileMenuButton.contains(event.target) && 
+            !fileMenuContent.contains(event.target)) {
+          setFileMenuOpen(false);
+        }
+      };
+
+      const handleKeyDown = (e) => {
+        // Handle keyboard shortcuts
+        if (e.ctrlKey || e.metaKey) {
+          switch (e.key.toLowerCase()) {
+            case 'b':
+              e.preventDefault();
+              toggleFormat('bold');
+              break;
+            case 'i':
+              e.preventDefault();
+              toggleFormat('italic');
+              break;
+            case 'u':
+              e.preventDefault();
+              toggleFormat('underline');
+              break;
+            case 'z':
+              e.preventDefault();
+              handleUndo();
+              break;
+            case 'y':
+              e.preventDefault();
+              handleRedo();
+              break;
+            default:
+              break;
+          }
+        }
+      };
+
+      const handleContentChange = () => {
+        if (editorRef.current) {
+          // Save current state to undo stack
+          const newContent = editorRef.current.innerHTML;
+          if (newContent !== content) {
+            setUndoStack(prev => [...prev, content]);
+            setRedoStack([]);
+            setContent(newContent);
+          }
+          
+          // Update formats based on current selection
+          updateFormatsFromSelection();
+        }
+      };
+      
+      const updateFormatsFromSelection = () => {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          if (range) {
+            // Get the parent element of the selection
+            let parentElement = range.commonAncestorContainer;
+            if (parentElement.nodeType === 3) { // Text node
+              parentElement = parentElement.parentNode;
+            }
+            
+            // Check for formatting
+            const computedStyle = window.getComputedStyle(parentElement);
+            setFormats(prev => ({
+              ...prev,
+              bold: computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700,
+              italic: computedStyle.fontStyle === 'italic',
+              underline: computedStyle.textDecoration.includes('underline'),
+              font: computedStyle.fontFamily,
+              size: computedStyle.fontSize,
+              align: computedStyle.textAlign,
+              color: rgbToHex(computedStyle.color),
+              background: rgbToHex(computedStyle.backgroundColor)
+            }));
+          }
+        }
+      };
+      
+      // Helper function to convert RGB to HEX
+      const rgbToHex = (rgb) => {
+        if (!rgb || rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent') {
+          return '#ffffff';
+        }
+        
+        // Extract RGB values
+        const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+        if (rgbMatch) {
+          const r = parseInt(rgbMatch[1]);
+          const g = parseInt(rgbMatch[2]);
+          const b = parseInt(rgbMatch[3]);
+          
+          return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+        
+        return rgb;
+      };
+
+      const clearDocument = () => {
+        if (window.confirm('Are you sure you want to clear all content?')) {
+          if (editorRef.current) {
+            // Save current state to undo stack
+            setUndoStack(prev => [...prev, content]);
+            setRedoStack([]);
+            
+            // Clear content
+            editorRef.current.innerHTML = '';
+            setContent('');
+          }
+        }
+        setFileMenuOpen(false);
+      };
+
+      const downloadAsTxt = () => {
+        if (editorRef.current) {
+          const text = editorRef.current.innerText;
+          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+          saveAs(blob, 'document.txt');
+        }
+        setFileMenuOpen(false);
+      };
+
+      const downloadAsDocx = () => {
+        if (editorRef.current) {
+          const content = editorRef.current.innerHTML;
+          
+          // Create a simple DOCX structure
+          const zip = new JSZip();
+          
+          // Add required files for a basic DOCX
+          zip.file("word/document.xml", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:body>
+                <w:p>
+                  <w:r>
+                    <w:t>${content.replace(/(<([^>]+)>)/gi, "")}</w:t>
+                  </w:r>
+                </w:p>
+              </w:body>
+            </w:document>`);
+          
+          zip.file("_rels/.rels", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+            </Relationships>`);
+          
+          zip.file("[Content_Types].xml", 
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            </Types>`);
+          
+          // Generate the DOCX file
+          zip.generateAsync({type:"blob"})
+            .then(function(content) {
+              saveAs(content, "document.docx");
+            });
+        }
+        setFileMenuOpen(false);
+      };
+      
+      const toggleFileMenu = (e) => {
+        e.stopPropagation();
+        setFileMenuOpen(!fileMenuOpen);
+      };
+      
+      // Format handling functions
+      const toggleFormat = (format) => {
+        document.execCommand('styleWithCSS', false, true);
+        
+        switch (format) {
+          case 'bold':
+            document.execCommand('bold', false);
+            setFormats(prev => ({ ...prev, bold: !prev.bold }));
+            break;
+          case 'italic':
+            document.execCommand('italic', false);
+            setFormats(prev => ({ ...prev, italic: !prev.italic }));
+            break;
+          case 'underline':
+            document.execCommand('underline', false);
+            setFormats(prev => ({ ...prev, underline: !prev.underline }));
+            break;
+          default:
+            break;
+        }
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setFont = (value) => {
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('fontName', false, value);
+        setFormats(prev => ({ ...prev, font: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setSize = (value) => {
+        document.execCommand('styleWithCSS', false, true);
+        
+        // Apply font size directly with execCommand
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          
+          if (range.collapsed) {
+            // If no text is selected, create a span with the font size
+            const span = document.createElement('span');
+            span.style.fontSize = value;
+            span.textContent = '\u200B'; // Zero-width space
+            range.insertNode(span);
+            
+            // Move cursor inside the span
+            range.setStart(span.firstChild, 1);
+            range.setEnd(span.firstChild, 1);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            // If text is selected, apply font size to selection
+            document.execCommand('fontSize', false, '7'); // Use a dummy size
+            
+            // Find all font tags created by the fontSize command and replace with the actual size
+            const fontElements = editorRef.current.querySelectorAll('font[size="7"]');
+            fontElements.forEach(el => {
+              el.removeAttribute('size');
+              el.style.fontSize = value;
+            });
+          }
+        }
+        
+        setFormats(prev => ({ ...prev, size: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setAlign = (value) => {
+        document.execCommand(value, false);
+        setFormats(prev => ({ ...prev, align: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setColor = (e) => {
+        const value = e.target.value;
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('foreColor', false, value);
+        setFormats(prev => ({ ...prev, color: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const setBackground = (e) => {
+        const value = e.target.value;
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('hiliteColor', false, value);
+        setFormats(prev => ({ ...prev, background: value }));
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const insertList = (type) => {
+        if (type === 'bullet') {
+          document.execCommand('insertUnorderedList', false);
+        } else if (type === 'ordered') {
+          document.execCommand('insertOrderedList', false);
+        }
+        
+        // Save current state
+        if (editorRef.current) {
+          setContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      const handleUndo = () => {
+        if (undoStack.length > 0) {
+          const prevContent = undoStack[undoStack.length - 1];
+          const newUndoStack = undoStack.slice(0, -1);
+          
+          setRedoStack(prev => [...prev, content]);
+          setUndoStack(newUndoStack);
+          
+          if (editorRef.current) {
+            editorRef.current.innerHTML = prevContent;
+            setContent(prevContent);
+          }
+        }
+      };
+      
+      const handleRedo = () => {
+        if (redoStack.length > 0) {
+          const nextContent = redoStack[redoStack.length - 1];
+          const newRedoStack = redoStack.slice(0, -1);
+          
+          setUndoStack(prev => [...prev, content]);
+          setRedoStack(newRedoStack);
+          
+          if (editorRef.current) {
+            editorRef.current.innerHTML = nextContent;
+            setContent(nextContent);
+          }
+        }
+      };
+
+      return (
+        <div className={`container mx-auto px-4 py-8 max-w-5xl`}>
+          <header className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-3xl font-bold text-blue-600">SimpleDoc</h1>
+              <div className="flex items-center">
+                <div className="dropdown mr-4">
+                  <button 
+                    id="file-menu-button"
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    onClick={toggleFileMenu}
+                  >
+                    File
+                  </button>
+                  <div 
+                    id="file-menu-content"
+                    className={`dropdown-content ${fileMenuOpen ? 'show' : ''}`}
+                  >
+                    <div className="dropdown-item" onClick={downloadAsTxt}>Download as .txt</div>
+                    <div className="dropdown-item" onClick={downloadAsDocx}>Download as .docx</div>
+                    <div className="dropdown-item" onClick={clearDocument}>Clear document</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`${darkMode ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-white'} px-4 py-2 rounded flex items-center`}
+                >
+                  {darkMode ? (
+                    <span>☀️ Light Mode</span>
+                  ) : (
+                    <span>🌙 Dark Mode</span>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            {/* Custom toolbar */}
+            <div className="custom-toolbar mb-0">
+              <div className="toolbar-group">
+                <select 
+                  className="toolbar-select mr-2" 
+                  value={formats.font} 
+                  onChange={(e) => setFont(e.target.value)}
+                  style={{ fontFamily: formats.font }}
+                >
+                  {fontOptions.map(font => (
+                    <option 
+                      key={font.value} 
+                      value={font.value}
+                      style={{ fontFamily: font.value }}
+                    >
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+                
+                <select 
+                  className="toolbar-select" 
+                  value={formats.size} 
+                  onChange={(e) => setSize(e.target.value)}
+                >
+                  {sizeOptions.map(size => (
+                    <option key={size.value} value={size.value}>
+                      {size.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className={`toolbar-button ${formats.bold ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('bold')}
+                  title="Bold (Ctrl+B)"
+                >
+                  <strong>B</strong>
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.italic ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('italic')}
+                  title="Italic (Ctrl+I)"
+                >
+                  <em>I</em>
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.underline ? 'active' : ''}`} 
+                  onClick={() => toggleFormat('underline')}
+                  title="Underline (Ctrl+U)"
+                >
+                  <u>U</u>
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <input 
+                  type="color" 
+                  value={formats.color} 
+                  onChange={setColor} 
+                  className="toolbar-button" 
+                  title="Text Color"
+                />
+                <input 
+                  type="color" 
+                  value={formats.background} 
+                  onChange={setBackground} 
+                  className="toolbar-button" 
+                  title="Highlight Color"
+                />
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className={`toolbar-button ${formats.align === 'left' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyLeft')}
+                  title="Align Left"
+                >
+                  ⟵
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'center' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyCenter')}
+                  title="Align Center"
+                >
+                  ⟷
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'right' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyRight')}
+                  title="Align Right"
+                >
+                  ⟶
+                </button>
+                <button 
+                  className={`toolbar-button ${formats.align === 'justify' ? 'active' : ''}`} 
+                  onClick={() => setAlign('justifyFull')}
+                  title="Justify"
+                >
+                  ≡
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className="toolbar-button" 
+                  onClick={() => insertList('bullet')}
+                  title="Bullet List"
+                >
+                  • List
+                </button>
+                <button 
+                  className="toolbar-button" 
+                  onClick={() => insertList('ordered')}
+                  title="Numbered List"
+                >
+                  1. List
+                </button>
+              </div>
+              
+              <div className="toolbar-group">
+                <button 
+                  className="toolbar-button" 
+                  onClick={handleUndo}
+                  title="Undo (Ctrl+Z)"
+                >
+                  ↩
+                </button>
+                <button 
+                  className="toolbar-button" 
+                  onClick={handleRedo}
+                  title="Redo (Ctrl+Y)"
+                >
+                  ↪
+                </button>
+              </div>
+            </div>
+          </header>
+          
+          <main>
+            <div className="editor-container">
+              <div 
+                ref={editorRef}
+                className="editor"
+                contentEditable={true}
+                onInput={handleContentChange}
+                onBlur={updateFormatsFromSelection}
+                onMouseUp={updateFormatsFromSelection}
+                onKeyUp={updateFormatsFromSelection}
+              ></div>
+            </div>
+          </main>
+          
+          <footer className="footer">
+            <p className="font-medium">All rights reserved © Koushik Maji</p>
+          </footer>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'947af93cc5367a0c',t:'MTc0ODU3Mzk0Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
